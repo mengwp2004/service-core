@@ -3,6 +3,7 @@ package com.rarible.core.reduce.model
 import com.rarible.blockchain.scanner.framework.model.Log
 import com.rarible.blockchain.scanner.framework.model.LogRecord
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlin.Comparator
 
@@ -43,7 +44,43 @@ interface Reducer<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K, L, R, E>> {
 }
 
 interface ReduceService<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K, L, R, E>> {
-    suspend fun reduce(logRecords: Flow<R>)
+    suspend fun reduce(logRecords: Flow<R>): Flow<E>
+}
+
+@FlowPreview
+open class EntityReduceService<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K, L, R, E>>(
+    private val markService: MarkService<L, R>,
+    private val recordMapper: RecordMapper<L, R>,
+    private val entityService: EntityService<K, L, R, E>,
+    private val reducer: Reducer<K, L, R, E>
+) : ReduceService<K, L, R, E> {
+
+    override suspend fun reduce(logRecords: Flow<R>): Flow<E> {
+        return logRecords
+            .flatMapConcat { record ->
+                recordMapper.map(record)
+            }
+            .windowUntilChanged { record ->
+                entityService.getEntityId(record)
+            }
+            .map { (entityId, entityRecords) ->
+                val currentEntity = entityService.get(entityId) ?: entityService.getEntityTemplate(entityId)
+                val records = RecordList(currentEntity.logRecords, markService)
+
+                val updatedEntity = entityRecords.fold(currentEntity) { entity, record ->
+                    if (records.canBeApplied(record)) {
+                        records.addOrRemove(record)
+                        reducer.reduce(entity, record)
+                    } else {
+                        entity
+                    }
+                }
+                if (currentEntity != updatedEntity) {
+                    entityService.update(updatedEntity.withLogRecords(records.geList()))
+                }
+                updatedEntity
+            }
+    }
 }
 
 class RecordList<L : Log<L>, R : LogRecord<L, R>>(
@@ -51,7 +88,7 @@ class RecordList<L : Log<L>, R : LogRecord<L, R>>(
     private val markService: MarkService<L, R>
 ) {
     private val comparator: Comparator<R> = Comparator.comparing { record -> record.mark }
-    private val records = records.sortedWith(comparator.reversed())
+    private val records = records.sortedWith(comparator.reversed()).toMutableList()
     private val latestMark = records.firstOrNull()?.mark
 
     fun canBeApplied(record: R): Boolean {
@@ -62,23 +99,24 @@ class RecordList<L : Log<L>, R : LogRecord<L, R>>(
         }
     }
 
-    fun addOrRemove(record: R): List<R> {
-        val newRecords = records.toMutableList()
-
+    fun addOrRemove(record: R) {
         when (record.log?.status) {
             Log.Status.CONFIRMED, Log.Status.PENDING -> {
                 val index = recordAddIndex(record)
                 requireIndex(index >= 0) { "Can't add record $record" }
-                newRecords.add(index, record)
+                records.add(index, record)
             }
             Log.Status.REVERTED, Log.Status.DROPPED, Log.Status.INACTIVE -> {
                 val index = recordRemoveIndex(record)
                 requireIndex(index > 0) { "Can't remove record $record" }
-                newRecords.removeAt(index)
+                records.removeAt(index)
             }
             null -> throw ReduceException("Can't get log from record $record")
         }
-        return newRecords.filter { markService.isStableMark(it.mark).not() }
+    }
+
+    fun geList(): List<R> {
+        return records.filter { record -> markService.isStableMark(record.mark) }
     }
 
     private fun recordAddIndex(record: R): Int {
@@ -99,28 +137,26 @@ class RecordList<L : Log<L>, R : LogRecord<L, R>>(
         get() = markService.get(this)
 }
 
-@FlowPreview
-open class EntityReduceService<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K, L, R, E>>(
-    private val markService: MarkService<L, R>,
-    private val recordMapper: RecordMapper<L, R>,
-    private val entityService: EntityService<K, L, R, E>,
-    private val reducer: Reducer<K, L, R, E>
-) : ReduceService<K, L, R, E> {
 
-    override suspend fun reduce(logRecords: Flow<R>) {
-        logRecords
-            .flatMapConcat { record -> recordMapper.map(record) }
-            .collect { record ->
-                val entityKey = entityService.getEntityId(record)
-                val currentEntity = entityService.get(entityKey) ?: entityService.getEntityTemplate(entityKey)
-                val records = RecordList(currentEntity.logRecords, markService)
-
-                if (records.canBeApplied(record)) {
-                    val updatedRecords = records.addOrRemove(record)
-                    val updatedEntity = reducer.reduce(currentEntity, record).withLogRecords(updatedRecords)
-                    entityService.update(updatedEntity)
-                }
+fun <T, V> Flow<T>.windowUntilChanged(keyExtractor: (T) -> V): Flow<KeyFlow<V, T>> = flow {
+    var last: Pair<V, Channel<T>>? = null
+    try {
+        collect {
+            val key = keyExtractor(it)
+            if (last?.first != key) {
+                val channel = Channel<T>(32)
+                emit(KeyFlow(key, channel.consumeAsFlow()))
+                last?.run { second.close() }
+                last = key to channel
+            }
+            last?.second?.run { send(it) }
         }
+    } finally {
+        last?.run { second.close() }
     }
 }
 
+data class KeyFlow<Key, Value>(
+    val key: Key,
+    val flow: Flow<Value>
+)
