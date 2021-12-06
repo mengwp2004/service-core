@@ -12,6 +12,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>com.rarible.blockchain.scanner</groupId>
+            <artifactId>rarible-blockchain-scanner-framework</artifactId>
+            <version>1.0.10</version>
+        </dependency>
+        <dependency>
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-core</artifactId>
         </dependency>
