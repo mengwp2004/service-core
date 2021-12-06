@@ -4,6 +4,8 @@ import com.rarible.blockchain.scanner.framework.model.Log
 import com.rarible.blockchain.scanner.framework.model.LogRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.switchMap
 import kotlin.Comparator
 
 class ReduceException(message : String) : IllegalStateException(message)
@@ -38,7 +40,7 @@ interface Reducer<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K, L, R, E>> {
     suspend fun reduce(entity: E, record: R): E
 }
 
-interface ReduceService<L : Log<L>, R : LogRecord<L, R>> {
+interface ReduceService<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K, L, R, E>> {
     suspend fun reduce(logRecords: Flow<R>)
 }
 
@@ -68,7 +70,7 @@ class RecordList<L : Log<L>, R : LogRecord<L, R>>(
                 newRecords.add(index, record)
             }
             Log.Status.REVERTED, Log.Status.DROPPED, Log.Status.INACTIVE -> {
-                val index = recordAddIndex(record)
+                val index = recordRemoveIndex(record)
                 requireIndex(index > 0) { "Can't remove record $record" }
                 newRecords.removeAt(index)
             }
@@ -99,7 +101,7 @@ open class EntityReduceService<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K,
     private val markService: MarkService<L, R>,
     private val entityService: EntityService<K, L, R, E>,
     private val reducer: Reducer<K, L, R, E>
-) : ReduceService<L, R> {
+) : ReduceService<K, L, R, E> {
 
     override suspend fun reduce(logRecords: Flow<R>) {
         logRecords.collect { record ->
