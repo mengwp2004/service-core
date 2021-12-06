@@ -2,10 +2,8 @@ package com.rarible.core.reduce.model
 
 import com.rarible.blockchain.scanner.framework.model.Log
 import com.rarible.blockchain.scanner.framework.model.LogRecord
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.switchMap
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.*
 import kotlin.Comparator
 
 class ReduceException(message : String) : IllegalStateException(message)
@@ -16,6 +14,10 @@ interface MarkService<L : Log<L>, R : LogRecord<L, R>> {
     fun get(logRecord: R): Mark
 
     fun isStableMark(mark: Mark): Boolean
+}
+
+interface RecordMapper<L : Log<L>, R : LogRecord<L, R>> {
+    suspend fun map(logRecord: R): Flow<R>
 }
 
 interface Entity<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K, L, R, E>> {
@@ -97,23 +99,27 @@ class RecordList<L : Log<L>, R : LogRecord<L, R>>(
         get() = markService.get(this)
 }
 
+@FlowPreview
 open class EntityReduceService<K, L : Log<L>, R : LogRecord<L, R>, E : Entity<K, L, R, E>>(
     private val markService: MarkService<L, R>,
+    private val recordMapper: RecordMapper<L, R>,
     private val entityService: EntityService<K, L, R, E>,
     private val reducer: Reducer<K, L, R, E>
 ) : ReduceService<K, L, R, E> {
 
     override suspend fun reduce(logRecords: Flow<R>) {
-        logRecords.collect { record ->
-            val entityKey = entityService.getEntityId(record)
-            val currentEntity = entityService.get(entityKey) ?: entityService.getEntityTemplate(entityKey)
-            val records = RecordList(currentEntity.logRecords, markService)
+        logRecords
+            .flatMapConcat { record -> recordMapper.map(record) }
+            .collect { record ->
+                val entityKey = entityService.getEntityId(record)
+                val currentEntity = entityService.get(entityKey) ?: entityService.getEntityTemplate(entityKey)
+                val records = RecordList(currentEntity.logRecords, markService)
 
-            if (records.canBeApplied(record)) {
-                val updatedRecords = records.addOrRemove(record)
-                val updatedEntity = reducer.reduce(currentEntity, record).withLogRecords(updatedRecords)
-                entityService.update(updatedEntity)
-            }
+                if (records.canBeApplied(record)) {
+                    val updatedRecords = records.addOrRemove(record)
+                    val updatedEntity = reducer.reduce(currentEntity, record).withLogRecords(updatedRecords)
+                    entityService.update(updatedEntity)
+                }
         }
     }
 }
