@@ -1,0 +1,8 @@
+loader:
+  broker-replica-set: ${kafka.hosts}
+  workers: 4
+  retry:
+    backoffDelaysMillis: [100, 200, 300, 400, 500]
+    job:
+      runner:
+        period: 1000
