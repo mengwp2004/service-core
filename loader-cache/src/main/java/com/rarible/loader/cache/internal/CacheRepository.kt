@@ -9,6 +9,7 @@ import org.springframework.data.mongodb.core.ReactiveMongoOperations
 import org.springframework.data.mongodb.core.findById
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
+import org.springframework.data.mongodb.core.query.exists
 import org.springframework.data.mongodb.core.query.isEqualTo
 import org.springframework.stereotype.Component
 
@@ -40,14 +41,20 @@ class CacheRepository(
         return getCacheEntry(type, key)?.data as? T
     }
 
-    private suspend fun getCacheEntry(type: CacheType, key: String) =
-        mongo.findById<CacheEntry>(key, getCacheCollection(type))
-            .awaitSingleOrNull()
+    suspend fun contains(type: CacheType, key: String): Boolean =
+        mongo.exists(
+            Query(Criteria("_id").isEqualTo(key)),
+            getCacheCollection(type)
+        ).awaitSingle()
 
     suspend fun remove(type: CacheType, key: String) {
         val query = Query(Criteria("_id").isEqualTo(key))
         mongo.remove(query, getCacheCollection(type)).awaitSingleOrNull()
     }
+
+    private suspend fun getCacheEntry(type: CacheType, key: String) =
+        mongo.findById<CacheEntry>(key, getCacheCollection(type))
+            .awaitSingleOrNull()
 
     private fun getCacheCollection(cacheType: CacheType): String = "cache-$cacheType"
 }

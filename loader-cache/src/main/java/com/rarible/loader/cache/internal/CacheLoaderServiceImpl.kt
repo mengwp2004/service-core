@@ -20,6 +20,9 @@ class CacheLoaderServiceImpl<T>(
     override suspend fun getAvailable(key: String): T? =
         cacheRepository.get<T>(type, key)
 
+    override suspend fun contains(key: String): Boolean =
+        cacheRepository.contains(type, key)
+
     override suspend fun remove(key: String) {
         cacheRepository.remove(type, key)
     }

@@ -31,7 +31,9 @@ class CacheRepositoryIt : AbstractIntegrationTest() {
             )
         )
         assertThat(cacheRepository.get<TestImage>(cacheType, key)).isEqualTo(testImage)
+        assertThat(cacheRepository.contains(cacheType, key)).isTrue
         assertThat(cacheRepository.get<TestImage>("otherType", key)).isNull()
+        assertThat(cacheRepository.get<TestImage>(cacheType, "otherKey")).isNull()
     }
 
     @Test
@@ -42,8 +44,10 @@ class CacheRepositoryIt : AbstractIntegrationTest() {
         val testImage = TestImage("data")
         cacheRepository.save(type, key, testImage)
         assertThat(cacheRepository.get<TestImage>(type, key)).isNotNull
+        assertThat(cacheRepository.contains(type, key)).isTrue
         cacheRepository.remove(type, key)
         assertThat(cacheRepository.get<TestImage>(type, key)).isNull()
+        assertThat(cacheRepository.contains(type, key)).isFalse()
     }
 
     @Test

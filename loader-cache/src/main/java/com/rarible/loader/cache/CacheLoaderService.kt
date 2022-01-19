@@ -8,4 +8,5 @@ interface CacheLoaderService<T> {
     suspend fun update(key: String)
     suspend fun getAvailable(key: String): T?
     suspend fun remove(key: String)
+    suspend fun contains(key: String): Boolean
 }

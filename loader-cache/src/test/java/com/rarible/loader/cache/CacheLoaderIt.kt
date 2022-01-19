@@ -4,8 +4,6 @@ import com.rarible.core.test.wait.Wait
 import com.rarible.loader.cache.test.TestImage
 import com.rarible.loader.cache.test.failEvents
 import com.rarible.loader.cache.test.loadEvents
-import io.mockk.ManyAnswersAnswer
-import io.mockk.ThrowingAnswer
 import io.mockk.coEvery
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
@@ -29,6 +27,7 @@ class CacheLoaderIt : AbstractIntegrationTest() {
             )
         }
         assertThat(imageLoadService.getAvailable(key)).isEqualTo(testImage)
+        assertThat(imageLoadService.contains(key)).isTrue()
     }
 
     @Test
@@ -88,7 +87,9 @@ class CacheLoaderIt : AbstractIntegrationTest() {
         imageLoadService.update(key)
         Wait.waitAssert { assertThat(loadEvents).hasSize(1) }
         assertThat(imageLoadService.getAvailable(key)).isNotNull
+        assertThat(imageLoadService.contains(key)).isTrue
         imageLoadService.remove(key)
         assertThat(imageLoadService.getAvailable(key)).isNull()
+        assertThat(imageLoadService.contains(key)).isFalse()
     }
 }
