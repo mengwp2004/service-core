@@ -2,10 +2,11 @@ package com.rarible.core.loader.internal
 
 import com.rarible.core.kafka.KafkaMessage
 import com.rarible.core.kafka.RaribleKafkaProducer
+import com.rarible.core.loader.LoadType
 import org.slf4j.LoggerFactory
 
 class LoadTaskKafkaSender(
-    private val kafkaSenders: Map<String, RaribleKafkaProducer<LoadTask>>
+    private val kafkaSenders: Map<LoadType, RaribleKafkaProducer<LoadTask>>
 ) {
     private val logger = LoggerFactory.getLogger(LoadTaskKafkaSender::class.java)
 
