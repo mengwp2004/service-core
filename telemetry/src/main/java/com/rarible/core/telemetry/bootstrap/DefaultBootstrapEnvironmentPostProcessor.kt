@@ -22,13 +22,16 @@ class DefaultBootstrapEnvironmentPostProcessor : EnvironmentPostProcessor {
             environment.propertySources.addLast(source)
         }
 
-        val applicationEnvironment = environment.getProperty(APPLICATION_ENVIRONMENT)
-            ?: throw IllegalArgumentException("Can't get property '$APPLICATION_ENVIRONMENT' from environment")
 
+        /*val applicationEnvironment = environment.getProperty(APPLICATION_ENVIRONMENT)
+            ?: throw IllegalArgumentException("Can't get property '$APPLICATION_ENVIRONMENT' from environment")
+        */
         val rootPath = environment.getProperty(CONSUL_ROOT_PATH) ?: environment.getProperty("consul.root.path")
 
+
         val defaultContextProperty = Properties()
-        defaultContextProperty.setProperty(CONSUL_CONFIG_DEFAULT_CONTEXT_PROPERTY, rootPath ?: applicationEnvironment)
+        //defaultContextProperty.setProperty(CONSUL_CONFIG_DEFAULT_CONTEXT_PROPERTY, rootPath ?: applicationEnvironment)
+        defaultContextProperty.setProperty(CONSUL_CONFIG_DEFAULT_CONTEXT_PROPERTY, rootPath ?: "dev")
 
         val propertySource: PropertySource<Map<String, Any>> =
             PropertiesPropertySource("consul-config-default-context-property", defaultContextProperty)

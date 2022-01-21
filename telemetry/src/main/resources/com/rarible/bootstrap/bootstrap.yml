@@ -14,7 +14,7 @@ spring:
       discovery:
         health-check-path: /_status/ping
         health-check-critical-timeout: "3m"
-      host: consul-agent
+      host: localhost
       port: 8500
       config:
         watch:
