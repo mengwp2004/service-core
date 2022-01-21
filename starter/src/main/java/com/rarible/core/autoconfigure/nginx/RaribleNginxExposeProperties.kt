@@ -9,6 +9,6 @@ internal const val RARIBLE_CORE_NGINX_EXPOSE = "rarible.core.nginx-expose"
 @ConstructorBinding
 data class RaribleNginxExposeProperties(
     val enabled: Boolean = false,
-    val server: String,
-    val location: String
+    val server: String = "localhost",
+    val location: String = "/"
 )

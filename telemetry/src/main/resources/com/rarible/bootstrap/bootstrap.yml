@@ -22,6 +22,9 @@ spring:
         enabled: true
         prefix:
 
+application:
+  environment: dev
+
 logging:
   logstash:
     tcp-socket:
